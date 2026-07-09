@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 
+// URL Backend Vercel milikmu
+const API_URL = "https://domain-utama-kamu.vercel.app";
+
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-const handleAuth = async (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     const endpoint = isLogin ? '/api/login' : '/api/register';
     
     try {
-      const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -19,25 +22,22 @@ const handleAuth = async (e) => {
       const data = await response.json();
 
       if (!response.ok) {
-        // Menangkap error dari backend (misal: 400 atau 401)
-        alert(data.detail || data.message || "Terjadi kesalahan");
+        alert(data.detail || data.message || "Terjadi kesalahan pada server");
         return;
       }
 
       if (isLogin) {
-        // JIKA LOGIN BERHASIL: Simpan token ke localStorage
         localStorage.setItem("token", data.access_token);
         alert("Login berhasil!");
-        // Refresh halaman otomatis agar App.jsx membaca token baru
         window.location.reload(); 
       } else {
-        // JIKA DAFTAR BERHASIL
         alert("Registrasi berhasil! Silakan login.");
-        setIsLogin(true); // Pindah ke tampilan login
+        setIsLogin(true); 
       }
       
     } catch (error) {
-      alert("Gagal terhubung ke server");
+      console.error(error);
+      alert("Gagal terhubung ke server Vercel. Coba periksa koneksi internet.");
     }
   };
 

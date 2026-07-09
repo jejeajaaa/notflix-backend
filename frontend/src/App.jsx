@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 
+// URL Backend Vercel milikmu
+const API_URL = "https://domain-utama-kamu.vercel.app"; 
+
 function App() {
   const [token, setToken] = useState(null);
   const [movies, setMovies] = useState([]); 
@@ -8,7 +11,6 @@ function App() {
   const [showWatchlist, setShowWatchlist] = useState(false); 
   const [searchQuery, setSearchQuery] = useState("");
   
-  // STATE BARU: Untuk UI/UX Peningkatan
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", isError: false });
 
@@ -20,18 +22,17 @@ function App() {
     }
   }, []);
 
-  // FUNGSI BARU: Memicu notifikasi Toast melayang
   const showNotification = (message, isError = false) => {
     setToast({ show: true, message, isError });
     setTimeout(() => {
       setToast({ show: false, message: "", isError: false });
-    }, 3000); // Otomatis hilang dalam 3 detik
+    }, 3000); 
   };
 
   const fetchMovies = async () => {
-    setLoading(true); // Mulai loading
+    setLoading(true); 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/movies');
+      const response = await fetch(`${API_URL}/api/movies`);
       const data = await response.json();
       if (Array.isArray(data)) {
         setMovies(data); 
@@ -42,7 +43,7 @@ function App() {
       console.error("Gagal mengambil data film:", error);
       setMovies([]);
     } finally {
-      setLoading(false); // Selesai loading
+      setLoading(false); 
     }
   };
 
@@ -55,7 +56,7 @@ function App() {
     
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/search?query=${searchQuery}`);
+      const response = await fetch(`${API_URL}/api/search?query=${searchQuery}`);
       const data = await response.json();
       if (Array.isArray(data)) {
         setMovies(data);
@@ -74,7 +75,7 @@ function App() {
   const fetchWatchlist = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/watchlist', {
+      const response = await fetch(`${API_URL}/api/watchlist`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -93,7 +94,7 @@ function App() {
 
   const addToWatchlist = async (movie) => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/watchlist', {
+      const response = await fetch(`${API_URL}/api/watchlist`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -120,7 +121,7 @@ function App() {
 
   const removeFromWatchlist = async (movieId, title) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/watchlist/${movieId}`, {
+      const response = await fetch(`${API_URL}/api/watchlist/${movieId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -159,7 +160,6 @@ function App() {
   return (
     <div style={{ padding: '20px', color: 'white', backgroundColor: '#141414', minHeight: '100vh', fontFamily: 'sans-serif', position: 'relative' }}>
       
-      {/* INJEKSI CSS SECARA LANGSUNG UNTUK EFEK HOVER ANIMASI */}
       <style>{`
         .movie-card {
           transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease;
@@ -186,7 +186,6 @@ function App() {
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
 
-      {/* NOTIFIKASI TOAST MELAYANG */}
       {toast.show && (
         <div style={{
           position: 'fixed', bottom: '30px', right: '30px',
@@ -245,7 +244,6 @@ function App() {
             : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : '🔥 Film Populer Saat Ini'}
         </h2>
         
-        {/* VIEW KONDISIONAL: LOADING SPINNER */}
         {loading ? (
           <div style={{ textAlign: 'center', marginTop: '50px' }}>
             <div className="spinner"></div>
@@ -266,7 +264,7 @@ function App() {
                 (movie.poster_path || movie.poster) && (
                   <div 
                     key={movie.id || movie.movie_id} 
-                    className="movie-card" // Menghubungkan ke class CSS hover di atas
+                    className="movie-card"
                     style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#181818', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
                   >
                     <img 

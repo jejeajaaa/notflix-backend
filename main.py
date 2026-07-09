@@ -24,13 +24,15 @@ Base = declarative_base()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Izinkan sementara untuk mempermudah koneksi produksi
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False, # Ini adalah kunci utamanya
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # --- HELPER FUNCTIONS ---
 def get_password_hash(password: str):
