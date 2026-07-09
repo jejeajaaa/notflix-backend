@@ -12,12 +12,12 @@ from jose import jwt, JWTError
 # --- KONFIGURASI ---
 TMDB_API_KEY = "a5ba2a3bd501b1c5d77da07766390701"
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
-SQLALCHEMY_DATABASE_URL = "sqlite:///./notflix.db"
+SQLALCHEMY_DATABASE_URL = "postgresql://neondb_owner:npg_Z34rSaCQMfTJ@ep-mute-grass-aoh6z9wv.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 SECRET_KEY = "rahasia_banget" 
 ALGORITHM = "HS256"
 
 # --- SETUP DATABASE & SECURITY ---
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
