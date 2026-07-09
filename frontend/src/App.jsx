@@ -13,6 +13,9 @@ function App() {
 
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", isError: false });
+  
+  // STATE BARU: Untuk menyimpan data film yang sedang diklik
+  const [selectedMovie, setSelectedMovie] = useState(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
@@ -80,7 +83,8 @@ function App() {
     }
   };
 
-  const addToWatchlist = async (movie) => {
+  const addToWatchlist = async (movie, e) => {
+    if (e) e.stopPropagation(); // Mencegah klik tombol memicu klik poster
     try {
       const response = await fetch(`${API_URL}/api/watchlist`, {
         method: 'POST',
@@ -107,7 +111,8 @@ function App() {
     }
   };
 
-  const removeFromWatchlist = async (movieId, title) => {
+  const removeFromWatchlist = async (movieId, title, e) => {
+    if (e) e.stopPropagation(); // Mencegah klik tombol memicu klik poster
     try {
       const response = await fetch(`${API_URL}/api/watchlist/${movieId}`, {
         method: 'DELETE',
@@ -117,6 +122,9 @@ function App() {
       if (response.ok) {
         showNotification(`❌ "${title}" dihapus dari daftar.`, false);
         fetchWatchlist();
+        if (selectedMovie && (selectedMovie.id === movieId || selectedMovie.movie_id === movieId)) {
+            setSelectedMovie(null); // Tutup pop-up jika film dihapus dari list
+        }
       } else {
         showNotification("Gagal menghapus film.", true);
       }
@@ -143,11 +151,11 @@ function App() {
   return (
     <div style={{ color: 'white', backgroundColor: '#0b0c10', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
       
-      {/* CSS Terpadu untuk UI/UX yang lebih Polish */}
       <style>{`
         .movie-card {
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
           border: 1px solid rgba(255, 255, 255, 0.05);
+          cursor: pointer; /* Mengubah kursor jadi tangan saat menyorot kartu */
         }
         .movie-card:hover {
           transform: translateY(-8px) scale(1.03);
@@ -191,7 +199,67 @@ function App() {
           85% { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(30px); }
         }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(0.9); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
       `}</style>
+
+      {/* POP-UP MODAL DETAIL FILM */}
+      {selectedMovie && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)',
+          zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+          padding: '20px', animation: 'fadeIn 0.3s'
+        }} onClick={() => setSelectedMovie(null)}>
+          <div style={{
+            backgroundColor: '#141519', padding: '30px', borderRadius: '15px',
+            maxWidth: '650px', width: '100%', position: 'relative',
+            border: '1px solid #333', boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+            animation: 'scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }} onClick={(e) => e.stopPropagation()}>
+            
+            <button onClick={() => setSelectedMovie(null)} style={{
+              position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.1)',
+              color: 'white', border: 'none', width: '30px', height: '30px', borderRadius: '50%',
+              fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✖</button>
+
+            <div style={{ display: 'flex', gap: '25px', flexWrap: 'wrap' }}>
+              <img src={`https://image.tmdb.org/t/p/w500${selectedMovie.poster_path || selectedMovie.poster}`} alt={selectedMovie.title} style={{ width: '180px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 10px 20px rgba(0,0,0,0.5)' }} />
+              
+              <div style={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+                <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: 'bold' }}>{selectedMovie.title}</h2>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontSize: '14px' }}>
+                  {selectedMovie.vote_average && <span style={{ color: '#f39c12', fontWeight: 'bold' }}>⭐ {selectedMovie.vote_average.toFixed(1)} / 10</span>}
+                  {selectedMovie.release_date && <span style={{ color: '#aaa' }}>📅 {selectedMovie.release_date.substring(0, 4)}</span>}
+                </div>
+                
+                <p style={{ color: '#ccc', fontSize: '15px', lineHeight: '1.6', flexGrow: 1 }}>
+                  {selectedMovie.overview ? selectedMovie.overview : "Sinopsis tidak tersedia untuk film ini."}
+                </p>
+
+                <div style={{ marginTop: '20px' }}>
+                  {showWatchlist ? (
+                     <button onClick={(e) => removeFromWatchlist(selectedMovie.movie_id, selectedMovie.title, e)} style={{ padding: '12px 24px', backgroundColor: 'transparent', color: '#ff4d4d', border: '1px solid #ff4d4d', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
+                        ❌ Hapus dari Watchlist
+                     </button>
+                  ) : (
+                     <button onClick={(e) => addToWatchlist(selectedMovie, e)} className="btn-primary" style={{ padding: '12px 24px', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
+                        + Tambahkan ke Watchlist
+                     </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toast.show && (
@@ -268,7 +336,8 @@ function App() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '35px' }}>
               {displayedMovies.map((movie) => (
                 (movie.poster_path || movie.poster) && (
-                  <div key={movie.id || movie.movie_id} className="movie-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#141519', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+                  /* KARTU FILM SEKARANG BISA DI-KLIK */
+                  <div key={movie.id || movie.movie_id} onClick={() => setSelectedMovie(movie)} className="movie-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#141519', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
                     <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title} style={{ width: '100%', height: '330px', objectFit: 'cover' }} />
                     <div style={{ padding: '20px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'linear-gradient(to top, #141519 80%, transparent)' }}>
                       <h3 style={{ fontSize: '16px', margin: '0 0 20px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '600' }}>
@@ -276,14 +345,14 @@ function App() {
                       </h3>
                       
                       {showWatchlist ? (
-                        <button onClick={() => removeFromWatchlist(movie.movie_id, movie.title)} style={{ width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#ff4d4d', border: '1px solid #ff4d4d', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}
+                        <button onClick={(e) => removeFromWatchlist(movie.movie_id, movie.title, e)} style={{ width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#ff4d4d', border: '1px solid #ff4d4d', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}
                           onMouseOver={(e) => { e.target.style.backgroundColor = '#ff4d4d'; e.target.style.color = 'white'; }}
                           onMouseOut={(e) => { e.target.style.backgroundColor = 'transparent'; e.target.style.color = '#ff4d4d'; }}
                         >
                           Hapus dari List
                         </button>
                       ) : (
-                        <button onClick={() => addToWatchlist(movie)} className="btn-primary" style={{ width: '100%', padding: '12px', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
+                        <button onClick={(e) => addToWatchlist(movie, e)} className="btn-primary" style={{ width: '100%', padding: '12px', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
                           + Watchlist
                         </button>
                       )}
