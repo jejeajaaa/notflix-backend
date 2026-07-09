@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
-// URL Backend Vercel milikmu
-const API_URL = "https://domain-utama-kamu.vercel.app";
+// Ganti dengan domain Vercel utama kamu jika berbeda
+const API_URL = "https://notflix-backend-jejeajaa.vercel.app";
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,7 +11,7 @@ const Login = () => {
   const handleAuth = async (e) => {
     e.preventDefault();
     const endpoint = isLogin ? '/api/login' : '/api/register';
-    
+
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -29,15 +29,15 @@ const Login = () => {
       if (isLogin) {
         localStorage.setItem("token", data.access_token);
         alert("Login berhasil!");
-        window.location.reload(); 
+        window.location.reload();
       } else {
         alert("Registrasi berhasil! Silakan login.");
-        setIsLogin(true); 
+        setIsLogin(true);
       }
-      
+
     } catch (error) {
       console.error(error);
-      alert("Gagal terhubung ke server Vercel. Coba periksa koneksi internet.");
+      alert("Gagal terhubung ke server. Pastikan URL sudah benar.");
     }
   };
 
@@ -45,16 +45,16 @@ const Login = () => {
     <div className="flex items-center justify-center min-h-screen bg-[#0b0c10] text-white">
       <form onSubmit={handleAuth} className="bg-[#141519] p-8 rounded-lg shadow-xl w-96 border border-gray-800">
         <h2 className="text-2xl font-bold mb-6 text-red-600">{isLogin ? 'Login' : 'Daftar Akun'}</h2>
-        
-        <input 
+
+        <input
           type="text" placeholder="Username" className="w-full p-3 mb-4 bg-black rounded border border-gray-600"
           value={username} onChange={(e) => setUsername(e.target.value)} required
         />
-        <input 
+        <input
           type="password" placeholder="Password" className="w-full p-3 mb-6 bg-black rounded border border-gray-600"
           value={password} onChange={(e) => setPassword(e.target.value)} required
         />
-        
+
         <button className="w-full bg-red-600 hover:bg-red-700 p-3 rounded font-bold transition-all">
           {isLogin ? 'Login' : 'Daftar'}
         </button>
