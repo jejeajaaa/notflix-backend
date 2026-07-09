@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Login from './Login';
 
 // Ganti dengan domain Vercel utama kamu jika berbeda
-const API_URL = "https://notflix-backend-jejeajaa.vercel.app";
+const API_URL = "https://notflix-backend.vercel.app/";
 
 function App() {
   const [token, setToken] = useState(null);
