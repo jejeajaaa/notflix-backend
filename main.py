@@ -177,3 +177,23 @@ def get_movie_trailer(movie_id: int):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal menghubungi TMDB: {str(e)}")
+
+# ==========================================
+# ENDPOINT BARU: FILTER GENRE & TAHUN
+# ==========================================
+@app.get("/api/discover")
+def discover_movies(genre: str = None, year: str = None):
+    url = f"{TMDB_BASE_URL}/discover/movie?api_key={TMDB_API_KEY}&language=en-US&sort_by=popularity.desc"
+    
+    if genre:
+        url += f"&with_genres={genre}"
+    if year:
+        url += f"&primary_release_year={year}"
+        
+    try:
+        response = requests.get(url)
+        if response.status_code != 200:
+            raise HTTPException(status_code=404, detail="Gagal filter film")
+        return response.json().get("results", [])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal menghubungi TMDB: {str(e)}")

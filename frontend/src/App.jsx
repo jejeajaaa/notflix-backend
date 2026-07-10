@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 
-const API_URL = "https://notflix-backend.vercel.app";
+// UBAH KE LOCALHOST DULU UNTUK NGETES!
+ const API_URL = "https://notflix-backend.vercel.app";
 
 function App() {
   const [token, setToken] = useState(null);
@@ -14,10 +15,12 @@ function App() {
   
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [featuredMovie, setFeaturedMovie] = useState(null);
-  
-  // STATE BARU: Untuk mengatur pop-up pemutar Trailer
   const [showTrailer, setShowTrailer] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState("");
+
+  // STATE BARU: Untuk Filter Navigasi
+  const [selectedGenre, setSelectedGenre] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
@@ -26,6 +29,16 @@ function App() {
       fetchMovies();
     }
   }, []);
+
+  // FUNGSI BARU: Fetch Film Berdasarkan Filter
+  useEffect(() => {
+    if (selectedGenre || selectedYear) {
+      fetchFilteredMovies();
+    } else {
+      // Jika filter kosong, kembali ke daftar populer
+      if (token && !searchQuery && !showWatchlist) fetchMovies();
+    }
+  }, [selectedGenre, selectedYear]);
 
   const showNotification = (message, isError = false) => {
     setToast({ show: true, message, isError });
@@ -39,10 +52,29 @@ function App() {
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) {
         setMovies(data);
-        setFeaturedMovie(data[0]); 
+        if (!selectedGenre && !selectedYear && !searchQuery) setFeaturedMovie(data[0]); 
       } else {
         setMovies([]);
       }
+    } catch (error) {
+      setMovies([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFilteredMovies = async () => {
+    setLoading(true);
+    setShowWatchlist(false);
+    setSearchQuery("");
+    try {
+      let url = `${API_URL}/api/discover?`;
+      if (selectedGenre) url += `genre=${selectedGenre}&`;
+      if (selectedYear) url += `year=${selectedYear}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      setMovies(Array.isArray(data) ? data : []);
     } catch (error) {
       setMovies([]);
     } finally {
@@ -57,6 +89,8 @@ function App() {
       return;
     }
     setLoading(true);
+    setSelectedGenre("");
+    setSelectedYear("");
     try {
       const response = await fetch(`${API_URL}/api/search?query=${searchQuery}`);
       const data = await response.json();
@@ -74,14 +108,12 @@ function App() {
     setToken(null);
   };
 
-  // Fungsi baru untuk membuka Trailer Asli dari Backend
   const openTrailer = async (movie) => {
     const movieId = movie.id || movie.movie_id;
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/movies/${movieId}/trailer`);
       if (!response.ok) throw new Error("Gagal mengambil data");
-      
       const data = await response.json();
       
       if (data.trailer_key) {
@@ -91,7 +123,6 @@ function App() {
         showNotification("Maaf, video trailer tidak tersedia untuk film ini.", true);
       }
     } catch (error) {
-      console.error("Error fetching trailer:", error);
       showNotification("Gagal memuat trailer film.", true);
     } finally {
       setLoading(false);
@@ -107,6 +138,14 @@ function App() {
     return str?.length > n ? str.substr(0, n - 1) + "..." : str;
   };
 
+  const resetHome = () => {
+    setShowWatchlist(false);
+    setSearchQuery("");
+    setSelectedGenre("");
+    setSelectedYear("");
+    fetchMovies();
+  };
+
   if (!token) return <Login />;
 
   const displayedMovies = showWatchlist ? watchlist : movies;
@@ -118,6 +157,8 @@ function App() {
         .glass-nav { position: sticky; top: 0; z-index: 1000; background: rgba(11, 12, 16, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; padding: 15px 40px; gap: 30px; transition: all 0.3s ease; }
         .nav-link { cursor: pointer; font-size: 14px; font-weight: 500; color: #a9a9a9; transition: color 0.3s; display: flex; align-items: center; gap: 5px; }
         .nav-link:hover { color: #ffffff; }
+        .filter-select { background: transparent; color: #a9a9a9; border: none; font-size: 14px; font-weight: 500; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; padding-right: 15px; }
+        .filter-select option { background: #141519; color: white; }
         .search-input { padding: 8px 15px 8px 35px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: white; font-size: 14px; outline: none; transition: border-color 0.3s; width: 200px; }
         .search-input:focus { border-color: #E50914; }
         .movie-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; }
@@ -136,16 +177,36 @@ function App() {
         </div>
       )}
 
+      {/* NAVBAR PRO DINAMIS */}
       <nav className="glass-nav">
-        <h1 style={{ color: '#E50914', fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '1px' }}>NOTFLIX</h1>
+        <h1 style={{ color: '#E50914', fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '1px', cursor: 'pointer' }} onClick={resetHome}>NOTFLIX</h1>
         <div style={{ display: 'flex', gap: '25px', flexGrow: 1, marginLeft: '20px' }}>
-          <span className="nav-link" onClick={() => {setShowWatchlist(false); setSearchQuery(""); fetchMovies();}} style={{ color: (!showWatchlist && !searchQuery) ? '#fff' : '#a9a9a9' }}>Beranda</span>
-          <span className="nav-link">Film</span>
-          <span className="nav-link">Serial TV</span>
-          <span className="nav-link">Genre ▾</span>
-          <span className="nav-link">Negara ▾</span>
-          <span className="nav-link">Tahun ▾</span>
+          <span className="nav-link" onClick={resetHome} style={{ color: (!showWatchlist && !searchQuery && !selectedGenre && !selectedYear) ? '#fff' : '#a9a9a9' }}>Beranda</span>
+          
+          <div className="nav-link">
+            <select className="filter-select" value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)}>
+              <option value="">Genre ▾</option>
+              <option value="28">Action</option>
+              <option value="35">Comedy</option>
+              <option value="27">Horror</option>
+              <option value="10749">Romance</option>
+              <option value="878">Sci-Fi</option>
+              <option value="16">Animation</option>
+            </select>
+          </div>
+
+          <div className="nav-link">
+            <select className="filter-select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+              <option value="">Tahun ▾</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+            </select>
+          </div>
         </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
           <form onSubmit={handleSearch} style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#a9a9a9' }}>🔍</span>
@@ -156,28 +217,25 @@ function App() {
         </div>
       </nav>
 
-      {!showWatchlist && !searchQuery && featuredMovie && (
+      {/* HERO SECTION DINAMIS */}
+      {!showWatchlist && !searchQuery && !selectedGenre && !selectedYear && featuredMovie && (
         <div style={{ height: '80vh', background: `linear-gradient(to right, rgba(11, 12, 16, 1) 10%, rgba(11, 12, 16, 0.6) 50%, rgba(11, 12, 16, 0) 100%), linear-gradient(to top, rgba(11, 12, 16, 1) 0%, rgba(11, 12, 16, 0) 20%), url(https://image.tmdb.org/t/p/original${featuredMovie.backdrop_path})`, backgroundSize: 'cover', backgroundPosition: 'center top', display: 'flex', alignItems: 'center', padding: '0 60px' }}>
           <div style={{ maxWidth: '600px', animation: 'fadeIn 1s ease-in' }}>
             <span style={{ background: '#E50914', padding: '4px 10px', borderRadius: '3px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' }}>TERPOPULER HARI INI</span>
             <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '15px 0', textShadow: '2px 2px 4px rgba(0,0,0,0.5)', lineHeight: '1.1' }}>{featuredMovie.title}</h1>
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', fontSize: '15px', color: '#ccc', fontWeight: '500' }}>
-               <span>⭐ {featuredMovie.vote_average?.toFixed(1)} Rating</span>
-               <span>•</span>
-               <span>{featuredMovie.release_date?.substring(0, 4)}</span>
-            </div>
             <p style={{ fontSize: '16px', color: '#e0e0e0', lineHeight: '1.6', marginBottom: '30px', textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>{truncateText(featuredMovie.overview, 180)}</p>
             <div style={{ display: 'flex', gap: '15px' }}>
               <button className="btn-play" onClick={() => openTrailer(featuredMovie)}>▶ Putar Trailer</button>
-              <button onClick={() => setSelectedMovie(featuredMovie)} style={{ background: 'rgba(109, 109, 110, 0.7)', color: 'white', padding: '12px 30px', border: 'none', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>ℹ Selengkapnya</button>
+              <button onClick={() => setSelectedMovie(featuredMovie)} style={{ background: 'rgba(109, 109, 110, 0.7)', color: 'white', padding: '12px 30px', border: 'none', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>ℹ Selengkapnya</button>
             </div>
           </div>
         </div>
       )}
 
-      <main style={{ padding: '40px 60px', maxWidth: '1600px', margin: '0 auto', marginTop: (!showWatchlist && !searchQuery) ? '-80px' : '0', position: 'relative', zIndex: 10 }}>
+      {/* KONTEN GRID */}
+      <main style={{ padding: '40px 60px', maxWidth: '1600px', margin: '0 auto', marginTop: (!showWatchlist && !searchQuery && !selectedGenre && !selectedYear) ? '-80px' : '0', position: 'relative', zIndex: 10 }}>
         <h2 style={{ marginBottom: '30px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px' }}>
-          {showWatchlist ? '🎬 Daftar Tontonan Saya' : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : '🔥 Sedang Trending'}
+          {showWatchlist ? '🎬 Daftar Tontonan Saya' : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : (selectedGenre || selectedYear) ? '🎯 Hasil Filter Kategori' : '🔥 Sedang Trending'}
         </h2>
         {loading ? (
            <p style={{textAlign: 'center', padding: '50px', color: '#888'}}>Memuat data film...</p>
@@ -194,6 +252,7 @@ function App() {
         )}
       </main>
 
+      {/* MODAL DETAIL */}
       {selectedMovie && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedMovie(null)}>
           <div style={{ backgroundColor: '#141519', padding: '30px', borderRadius: '15px', maxWidth: '650px', width: '100%', border: '1px solid #333' }} onClick={(e) => e.stopPropagation()}>
@@ -206,7 +265,6 @@ function App() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
