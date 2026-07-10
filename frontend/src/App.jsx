@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 
-// Sesuaikan URL ini (Ganti ke localhost jika sedang ngetes lokal)
-const API_URL = "https://notflix-backend.vercel.app";
-// const API_URL = "http://localhost:8000"; 
+const API_URL = "http://localhost:8000"; 
+ 
 
 function App() {
   const [token, setToken] = useState(null);
@@ -14,6 +13,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", isError: false });
   
+  // STATE BARU: Tipe Konten (movie atau tv)
+  const [contentType, setContentType] = useState("movie"); 
+
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState("");
@@ -30,7 +32,6 @@ function App() {
   const [featuredMovie, setFeaturedMovie] = useState(null);
   const [heroTrailerKey, setHeroTrailerKey] = useState("");
 
-  // STATE BARU: Untuk menyimpan daftar film yang sedang/pernah ditonton
   const [continueWatching, setContinueWatching] = useState([]);
 
   useEffect(() => {
@@ -39,26 +40,29 @@ function App() {
       setToken(savedToken);
       fetchMovies();
       fetchWatchlist(savedToken);
-      
-      // Ambil data riwayat nonton dari localStorage lokal
       const savedProgress = localStorage.getItem("continueWatching");
-      if (savedProgress) {
-        setContinueWatching(JSON.parse(savedProgress));
-      }
+      if (savedProgress) setContinueWatching(JSON.parse(savedProgress));
     }
   }, []);
+
+  // Fetch ulang kalau tipe konten (Film/Drakor) berubah
+  useEffect(() => {
+    if (token) {
+      setSearchQuery("");
+      setSelectedGenre("");
+      setSelectedYear("");
+      fetchMovies();
+    }
+  }, [contentType]);
 
   useEffect(() => {
     if (selectedGenre || selectedYear) {
       fetchFilteredMovies();
-    } else {
-      if (token && !searchQuery && !showWatchlist) fetchMovies();
     }
   }, [selectedGenre, selectedYear]);
 
   useEffect(() => {
     if (top10Movies.length === 0 || showWatchlist || searchQuery || selectedGenre || selectedYear) return;
-    
     const interval = setInterval(() => {
       setCurrentHeroIndex((prevIndex) => {
         const nextIndex = (prevIndex + 1) % top10Movies.length;
@@ -66,14 +70,14 @@ function App() {
         return nextIndex;
       });
     }, 10000); 
-
     return () => clearInterval(interval);
   }, [top10Movies, showWatchlist, searchQuery, selectedGenre, selectedYear]);
 
   const loadHeroData = async (movie) => {
     setFeaturedMovie(movie);
     try {
-      const response = await fetch(`${API_URL}/api/movies/${movie.id || movie.movie_id}/trailer`);
+      // Endpoint trailer harus disesuaikan di backend untuk mendukung TV Shows
+      const response = await fetch(`${API_URL}/api/movies/${movie.id || movie.movie_id}/trailer?type=${contentType}`);
       const data = await response.json();
       if (data.trailer_key) {
         setHeroTrailerKey(data.trailer_key);
@@ -106,14 +110,15 @@ function App() {
     try {
       if (isSaved) {
         await fetch(`${API_URL}/api/watchlist/${movieId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-        showNotification("Film dihapus dari Watchlist.");
+        showNotification("Berhasil dihapus dari Watchlist.");
       } else {
         await fetch(`${API_URL}/api/watchlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ movie_id: movieId, title: movie.title, poster: movie.poster_path || movie.poster })
+          // Gunakan name jika title tidak ada (TV Shows menggunakan 'name')
+          body: JSON.stringify({ movie_id: movieId, title: movie.title || movie.name, poster: movie.poster_path || movie.poster })
         });
-        showNotification("Film ditambahkan ke Watchlist!");
+        showNotification("Berhasil ditambahkan ke Watchlist!");
       }
       fetchWatchlist();
     } catch (error) {
@@ -124,7 +129,9 @@ function App() {
   const fetchMovies = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/movies`);
+      // Kita menambahkan query parameter ?type=tv agar backend tahu kita minta drakor
+      const endpoint = contentType === "tv" ? `${API_URL}/api/discover?type=tv&language=ko` : `${API_URL}/api/movies`;
+      const response = await fetch(endpoint);
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) {
         setMovies(data);
@@ -147,7 +154,7 @@ function App() {
   const fetchFilteredMovies = async () => {
     setLoading(true); setShowWatchlist(false); setSearchQuery("");
     try {
-      let url = `${API_URL}/api/discover?`;
+      let url = `${API_URL}/api/discover?type=${contentType}&`;
       if (selectedGenre) url += `genre=${selectedGenre}&`;
       if (selectedYear) url += `year=${selectedYear}`;
       const response = await fetch(url);
@@ -161,7 +168,7 @@ function App() {
     if (!searchQuery.trim()) { fetchMovies(); return; }
     setLoading(true); setSelectedGenre(""); setSelectedYear("");
     try {
-      const response = await fetch(`${API_URL}/api/search?query=${searchQuery}`);
+      const response = await fetch(`${API_URL}/api/search?query=${searchQuery}&type=${contentType}`);
       const data = await response.json();
       setMovies(Array.isArray(data) ? data : []);
       setShowWatchlist(false);
@@ -174,7 +181,7 @@ function App() {
     const movieId = movie.id || movie.movie_id;
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/movies/${movieId}/trailer`);
+      const response = await fetch(`${API_URL}/api/movies/${movieId}/trailer?type=${contentType}`);
       if (!response.ok) throw new Error("Gagal mengambil data");
       const data = await response.json();
       if (data.trailer_key) {
@@ -188,16 +195,16 @@ function App() {
 
   const closeTrailer = () => { setShowTrailer(false); setTrailerUrl(""); };
 
-  // FUNGSI PLAY FILM + OTOMATIS SIMPAN KE CONTINUE WATCHING
-    const playFullMovie = (movie) => {
-      const movieId = movie.id || movie.movie_id;
-      setFullMovieUrl(`https://vidsrc.to/embed/movie/${movieId}`);
-      setShowFullMovie(true);
+  const playFullMovie = (movie) => {
+    const movieId = movie.id || movie.movie_id;
+    // VidSrc juga beda URL untuk TV Shows
+    const url = contentType === "tv" ? `https://vidsrc.to/embed/tv/${movieId}` : `https://vidsrc.to/embed/movie/${movieId}`;
+    setFullMovieUrl(url);
+    setShowFullMovie(true);
 
-    // Logika simpan riwayat nonton
     setContinueWatching((prev) => {
       const filtered = prev.filter((m) => (m.id || m.movie_id) !== movieId);
-      const updated = [movie, ...filtered].slice(0, 6); // Ambil maksimal 6 film terbaru
+      const updated = [movie, ...filtered].slice(0, 6); 
       localStorage.setItem("continueWatching", JSON.stringify(updated));
       return updated;
     });
@@ -224,10 +231,12 @@ function App() {
         .glass-nav { position: sticky; top: 0; z-index: 1000; background: rgba(11, 12, 16, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; padding: 15px 40px; gap: 30px; transition: all 0.3s ease; }
         .nav-link { cursor: pointer; font-size: 14px; font-weight: 500; color: #a9a9a9; transition: color 0.3s; display: flex; align-items: center; gap: 5px; }
         .nav-link:hover { color: #ffffff; }
-        .filter-select { background: transparent; color: #a9a9a9; border: none; font-size: 14px; font-weight: 500; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; padding-right: 15px; }
+        .content-toggle { display: flex; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 4px; gap: 5px; }
+        .toggle-btn { padding: 6px 15px; border-radius: 15px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.3s; background: transparent; color: #a9a9a9; }
+        .toggle-btn.active { background: #E50914; color: white; }
+        .filter-select { background: transparent; color: #a9a9a9; border: none; font-size: 14px; font-weight: 500; cursor: pointer; outline: none; padding-right: 15px; }
         .filter-select option { background: #141519; color: white; }
-        .search-input { padding: 8px 15px 8px 35px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: white; font-size: 14px; outline: none; transition: border-color 0.3s; width: 200px; }
-        .search-input:focus { border-color: #E50914; }
+        .search-input { padding: 8px 15px 8px 35px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: white; font-size: 14px; outline: none; width: 200px; }
         .movie-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; }
         .movie-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 15px 30px rgba(229, 9, 20, 0.2); border-color: rgba(229, 9, 20, 0.5); z-index: 10; }
         .btn-play-movie { background: white; color: black; padding: 12px 30px; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
@@ -240,7 +249,7 @@ function App() {
         .hero-video-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: hidden; background-color: #000; }
         .hero-video-wrapper iframe { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; pointer-events: none; }
         .hero-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to right, rgba(11, 12, 16, 1) 15%, rgba(11, 12, 16, 0.6) 50%, rgba(11, 12, 16, 0) 100%), linear-gradient(to top, rgba(11, 12, 16, 1) 0%, rgba(11, 12, 16, 0) 25%); z-index: 1; }
-        .hero-content { position: relative; z-index: 2; max-width: 600px; animation: fadeIn 1s ease-in; }
+        .hero-content { position: relative; z-index: 2; max-width: 600px; }
         .carousel-indicators { position: absolute; bottom: 40px; right: 60px; z-index: 2; display: flex; gap: 8px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.3); cursor: pointer; transition: 0.3s; }
         .dot.active { background: white; transform: scale(1.3); }
@@ -253,7 +262,7 @@ function App() {
           <div style={{ backgroundColor: '#141519', padding: '40px', borderRadius: '15px', maxWidth: '350px', width: '100%', border: '1px solid #333', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ width: '80px', height: '80px', backgroundColor: '#E50914', borderRadius: '50%', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>👤</div>
             <h2 style={{ margin: '0 0 5px 0' }}>Profil Akun</h2>
-            <p style={{ color: '#a9a9a9', marginBottom: '25px', fontSize: '15px' }}>Total Watchlist: <strong>{watchlist.length} Film</strong></p>
+            <p style={{ color: '#a9a9a9', marginBottom: '25px', fontSize: '15px' }}>Total Watchlist: <strong>{watchlist.length} Konten</strong></p>
             <button onClick={() => showNotification("⚙️ Fitur Pengaturan akan segera hadir di update selanjutnya!")} style={{ width: '100%', padding: '12px', background: '#222', color: 'white', border: '1px solid #444', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '10px' }} onMouseOver={(e) => {e.target.style.background = '#444';}} onMouseOut={(e) => {e.target.style.background = '#222';}}>⚙️ Pengaturan</button>
             <button onClick={handleLogout} style={{ width: '100%', padding: '12px', background: 'transparent', color: '#E50914', border: '1px solid #E50914', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '10px' }} onMouseOver={(e) => {e.target.style.background = '#E50914'; e.target.style.color = 'white';}} onMouseOut={(e) => {e.target.style.background = 'transparent'; e.target.style.color = '#E50914';}}>🚪 Keluar (Logout)</button>
             <button onClick={() => setShowProfile(false)} style={{ width: '100%', padding: '12px', background: '#333', color: 'white', border: 'none', borderRadius: '5px', fontSize: '16px', cursor: 'pointer', transition: '0.2s' }} onMouseOver={(e) => e.target.style.background = '#444'} onMouseOut={(e) => e.target.style.background = '#333'}>Tutup</button>
@@ -270,36 +279,31 @@ function App() {
         </div>
       )}
 
-      {/* THE PROTECTION PLAYER PLAYER IFRAME */}
       {showFullMovie && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 5000, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={closeFullMovie}>
           <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#000' }} onClick={(e) => e.stopPropagation()}>
             <button onClick={closeFullMovie} style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: '5px', fontSize: '16px', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', gap: '10px' }}>⬅ Kembali ke NOTFLIX</button>
-            
-            {/* Tameng sandbox DIBUKA kembali agar video tidak error */}
-            <iframe 
-              width="100%" 
-              height="100%" 
-              src={fullMovieUrl} 
-              title="Full Movie Player" 
-              frameBorder="0" 
-              allowFullScreen
-            ></iframe>
-            
+            <iframe width="100%" height="100%" src={fullMovieUrl} title="Full Movie Player" frameBorder="0" allowFullScreen></iframe>
           </div>
         </div>
       )}
-      
 
       <nav className="glass-nav">
         <h1 style={{ color: '#E50914', fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '1px', cursor: 'pointer' }} onClick={resetHome}>NOTFLIX</h1>
+        
+        {/* TOGGLE BARU: FILM VS DRAKOR */}
+        <div className="content-toggle" style={{ marginLeft: '10px' }}>
+          <button className={`toggle-btn ${contentType === 'movie' ? 'active' : ''}`} onClick={() => setContentType('movie')}>🎬 Film</button>
+          <button className={`toggle-btn ${contentType === 'tv' ? 'active' : ''}`} onClick={() => setContentType('tv')}>🇰🇷 Drakor & Series</button>
+        </div>
+
         <div style={{ display: 'flex', gap: '25px', flexGrow: 1, marginLeft: '20px' }}>
-          <span className="nav-link" onClick={resetHome} style={{ color: (!showWatchlist && !searchQuery && !selectedGenre && !selectedYear) ? '#fff' : '#a9a9a9' }}>Beranda</span>
           <div className="nav-link"><select className="filter-select" value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)}><option value="">Genre ▾</option><option value="28">Action</option><option value="35">Comedy</option><option value="27">Horror</option><option value="10749">Romance</option><option value="878">Sci-Fi</option><option value="16">Animation</option></select></div>
           <div className="nav-link"><select className="filter-select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}><option value="">Tahun ▾</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option></select></div>
         </div>
+        
         <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
-          <form onSubmit={handleSearch} style={{ position: 'relative' }}><span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#a9a9a9' }}>🔍</span><input type="text" placeholder="Cari judul..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" /></form>
+          <form onSubmit={handleSearch} style={{ position: 'relative' }}><span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#a9a9a9' }}>🔍</span><input type="text" placeholder={`Cari ${contentType === 'movie' ? 'Film' : 'Series'}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" /></form>
           <span className="nav-link" onClick={() => setShowWatchlist(true)} style={{ color: showWatchlist ? '#fff' : '#a9a9a9' }}>Watchlist</span>
           <div className="nav-link" onClick={() => setShowProfile(true)} style={{ fontWeight: 'bold' }}>Akun ▾</div>
         </div>
@@ -310,28 +314,20 @@ function App() {
         <div className="hero-container">
           <div className="hero-video-wrapper" style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${featuredMovie.backdrop_path})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
             {heroTrailerKey && (
-              <iframe 
-                src={`https://www.youtube.com/embed/${heroTrailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${heroTrailerKey}`}
-                frameBorder="0" 
-                allow="autoplay; encrypted-media" 
-                allowFullScreen
-              ></iframe>
+              <iframe src={`https://www.youtube.com/embed/${heroTrailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${heroTrailerKey}`} frameBorder="0" allow="autoplay; encrypted-media" allowFullScreen></iframe>
             )}
             <div className="hero-overlay"></div>
           </div>
 
           <div className="hero-content">
-            <span style={{ background: '#E50914', padding: '4px 10px', borderRadius: '3px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' }}>TOP 10 VIRAL #{currentHeroIndex + 1}</span>
-            <h1 style={{ fontSize: '64px', fontWeight: '900', margin: '15px 0', textShadow: '2px 2px 4px rgba(0,0,0,0.8)', lineHeight: '1' }}>{featuredMovie.title}</h1>
+            <span style={{ background: '#E50914', padding: '4px 10px', borderRadius: '3px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' }}>TOP 10 {contentType === 'tv' ? 'SERIES' : 'MOVIE'} VIRAL #{currentHeroIndex + 1}</span>
+            {/* Menggunakan movie.name untuk TV Series dan movie.title untuk Film */}
+            <h1 style={{ fontSize: '64px', fontWeight: '900', margin: '15px 0', textShadow: '2px 2px 4px rgba(0,0,0,0.8)', lineHeight: '1' }}>{featuredMovie.title || featuredMovie.name}</h1>
             <p style={{ fontSize: '16px', color: '#e0e0e0', lineHeight: '1.6', marginBottom: '30px', textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>{truncateText(featuredMovie.overview, 180)}</p>
             
             <div style={{ display: 'flex', gap: '15px' }}>
-              <button className="btn-play-movie" onClick={() => playFullMovie(featuredMovie)}>
-                <span style={{ fontSize: '20px' }}>▶</span> Putar Film
-              </button>
-              <button className="btn-trailer" onClick={() => openTrailer(featuredMovie)}>
-                🎬 Trailer
-              </button>
+              <button className="btn-play-movie" onClick={() => playFullMovie(featuredMovie)}><span style={{ fontSize: '20px' }}>▶</span> Putar {contentType === 'tv' ? 'Episode 1' : 'Film'}</button>
+              <button className="btn-trailer" onClick={() => openTrailer(featuredMovie)}>🎬 Trailer</button>
             </div>
           </div>
 
@@ -346,20 +342,14 @@ function App() {
       {/* MAIN CONTAINER CONTENT */}
       <main style={{ padding: '40px 60px', maxWidth: '1600px', margin: '0 auto', marginTop: (!showWatchlist && !searchQuery && !selectedGenre && !selectedYear) ? '0px' : '0', position: 'relative', zIndex: 10 }}>
         
-        {/* BARIS BARU: LANJUTKAN MENONTON (Hanya muncul jika ada riwayat film & di Beranda utama) */}
         {!showWatchlist && !searchQuery && !selectedGenre && !selectedYear && continueWatching.length > 0 && (
           <div style={{ marginBottom: '45px' }}>
-            <h2 style={{ marginBottom: '20px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px', color: '#E50914' }}>
-              🍿 Lanjutkan Menonton
-            </h2>
+            <h2 style={{ marginBottom: '20px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px', color: '#E50914' }}>🍿 Lanjutkan Menonton</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '25px' }}>
               {continueWatching.map((movie, index) => (
                 <div key={`cw-${index}`} onClick={() => setSelectedMovie(movie)} className="movie-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#141519', borderRadius: '10px', overflow: 'hidden', position: 'relative' }}>
-                  <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title} style={{ width: '100%', height: '300px', objectFit: 'cover' }} />
-                  {/* Efek progress bar merah palsu di bawah poster biar makin estetik netflix */}
-                  <div style={{ width: '100%', height: '4px', backgroundColor: '#333' }}>
-                    <div style={{ width: `${85 - (index * 12)}%`, height: '100%', backgroundColor: '#E50914' }}></div>
-                  </div>
+                  <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title || movie.name} style={{ width: '100%', height: '300px', objectFit: 'cover' }} />
+                  <div style={{ width: '100%', height: '4px', backgroundColor: '#333' }}><div style={{ width: `${85 - (index * 12)}%`, height: '100%', backgroundColor: '#E50914' }}></div></div>
                 </div>
               ))}
             </div>
@@ -367,17 +357,17 @@ function App() {
         )}
 
         <h2 style={{ marginBottom: '30px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px' }}>
-          {showWatchlist ? '🎬 Daftar Tontonan Saya' : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : (selectedGenre || selectedYear) ? '🎯 Hasil Filter Kategori' : '🔥 Sedang Trending'}
+          {showWatchlist ? '🎬 Daftar Tontonan Saya' : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : (selectedGenre || selectedYear) ? '🎯 Hasil Filter Kategori' : (contentType === 'tv' ? '🔥 Drakor & Series Trending' : '🔥 Film Trending')}
         </h2>
 
         {loading ? (
-           <p style={{textAlign: 'center', padding: '50px', color: '#888'}}>Memuat data film...</p>
+           <p style={{textAlign: 'center', padding: '50px', color: '#888'}}>Memuat data konten...</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '25px' }}>
             {displayedMovies.map((movie) => (
               (movie.poster_path || movie.poster) && (
                 <div key={movie.id || movie.movie_id} onClick={() => setSelectedMovie(movie)} className="movie-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#141519', borderRadius: '10px', overflow: 'hidden' }}>
-                  <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title} style={{ width: '100%', height: '330px', objectFit: 'cover' }} />
+                  <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title || movie.name} style={{ width: '100%', height: '330px', objectFit: 'cover' }} />
                 </div>
               )
             ))}
@@ -389,16 +379,14 @@ function App() {
       {selectedMovie && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedMovie(null)}>
           <div style={{ backgroundColor: '#141519', padding: '40px', borderRadius: '15px', maxWidth: '700px', width: '100%', border: '1px solid #333' }} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ margin: '0 0 10px 0', fontSize: '28px' }}>{selectedMovie.title}</h2>
+            <h2 style={{ margin: '0 0 10px 0', fontSize: '28px' }}>{selectedMovie.title || selectedMovie.name}</h2>
             <p style={{ color: '#ccc', lineHeight: '1.6', marginBottom: '30px' }}>{selectedMovie.overview || "Sinopsis tidak tersedia."}</p>
             
             <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
               <button className="btn-play-movie" onClick={() => playFullMovie(selectedMovie)} style={{ flexGrow: 1, justifyContent: 'center' }}>
-                ▶ Putar Film
+                ▶ Putar {contentType === 'tv' ? 'Episode 1' : 'Film'}
               </button>
-              <button className="btn-trailer" onClick={() => openTrailer(selectedMovie)}>
-                🎬 Trailer
-              </button>
+              <button className="btn-trailer" onClick={() => openTrailer(selectedMovie)}>🎬 Trailer</button>
               <button onClick={() => toggleWatchlist(selectedMovie)} style={{ padding: '12px 25px', background: watchlist.find(item => item.movie_id === (selectedMovie.id || selectedMovie.movie_id)) ? '#4CAF50' : '#333', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>
                 {watchlist.find(item => item.movie_id === (selectedMovie.id || selectedMovie.movie_id)) ? '✔ Di Watchlist' : '+ Watchlist'}
               </button>

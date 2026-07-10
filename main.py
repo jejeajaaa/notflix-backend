@@ -27,7 +27,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Izinkan semua origin
+    allow_origins=["*"], 
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -116,9 +116,11 @@ def get_movies():
     response = requests.get(f"{TMDB_BASE_URL}/movie/popular?api_key={TMDB_API_KEY}")
     return response.json().get("results", [])
 
+# PERBAIKAN 1: Tambah parameter 'type' pada fungsi search_movies
 @app.get("/api/search")
-def search_movies(query: str):
-    response = requests.get(f"{TMDB_BASE_URL}/search/movie?api_key={TMDB_API_KEY}&query={query}")
+def search_movies(query: str, type: str = 'movie'):
+    content_type = 'tv' if type == 'tv' else 'movie'
+    response = requests.get(f"{TMDB_BASE_URL}/search/{content_type}?api_key={TMDB_API_KEY}&query={query}")
     return response.json().get("results", [])
 
 @app.post("/api/watchlist")
@@ -147,12 +149,12 @@ def delete_from_watchlist(movie_id: int, current_user: str = Depends(get_current
 
 
 # ==========================================
-# ENDPOINT BARU: AMBIL DATA TRAILER YOUTUBE
+# PERBAIKAN 2: AMBIL DATA TRAILER YOUTUBE (Dukung TV Shows)
 # ==========================================
 @app.get("/api/movies/{movie_id}/trailer")
-def get_movie_trailer(movie_id: int):
-    # Mengambil video spesifik untuk film ini dari TMDB
-    tmdb_url = f"{TMDB_BASE_URL}/movie/{movie_id}/videos?api_key={TMDB_API_KEY}&language=en-US"
+def get_movie_trailer(movie_id: int, type: str = 'movie'):
+    content_type = 'tv' if type == 'tv' else 'movie'
+    tmdb_url = f"{TMDB_BASE_URL}/{content_type}/{movie_id}/videos?api_key={TMDB_API_KEY}&language=en-US"
     
     try:
         response = requests.get(tmdb_url)
@@ -162,33 +164,38 @@ def get_movie_trailer(movie_id: int):
         data = response.json()
         videos = data.get("results", [])
         
-        # 1. Cari video yang spesifik bertipe 'Trailer' dan bersumber dari 'YouTube'
         for video in videos:
             if video.get("site") == "YouTube" and video.get("type") == "Trailer":
                 return {"trailer_key": video.get("key")}
                 
-        # 2. Alternatif: Jika tipe 'Trailer' tidak ada, ambil video YouTube apa saja yang tersedia (misal: Teaser)
         for video in videos:
             if video.get("site") == "YouTube":
                 return {"trailer_key": video.get("key")}
                 
-        # Jika benar-benar kosong
         return {"trailer_key": None}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal menghubungi TMDB: {str(e)}")
 
 # ==========================================
-# ENDPOINT BARU: FILTER GENRE & TAHUN
+# PERBAIKAN 3: FILTER GENRE & TAHUN (Dukung TV Shows & Language)
 # ==========================================
 @app.get("/api/discover")
-def discover_movies(genre: str = None, year: str = None):
-    url = f"{TMDB_BASE_URL}/discover/movie?api_key={TMDB_API_KEY}&language=en-US&sort_by=popularity.desc"
+def discover_movies(genre: str = None, year: str = None, type: str = 'movie', language: str = None):
+    content_type = 'tv' if type == 'tv' else 'movie'
+    url = f"{TMDB_BASE_URL}/discover/{content_type}?api_key={TMDB_API_KEY}&language=en-US&sort_by=popularity.desc"
     
     if genre:
         url += f"&with_genres={genre}"
     if year:
-        url += f"&primary_release_year={year}"
+        # Parameter tahun di TMDB berbeda untuk film dan serial TV
+        if content_type == 'movie':
+            url += f"&primary_release_year={year}"
+        else:
+            url += f"&first_air_date_year={year}"
+            
+    if language:
+        url += f"&with_original_language={language}"
         
     try:
         response = requests.get(url)
