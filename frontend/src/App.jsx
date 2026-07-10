@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 
-// Ganti ke localhost kalau mau ngetes lokal!
+// Sesuaikan URL ini (Ganti ke localhost jika sedang ngetes lokal)
 const API_URL = "https://notflix-backend.vercel.app";
+// const API_URL = "http://localhost:8000"; 
 
 function App() {
   const [token, setToken] = useState(null);
@@ -17,16 +18,20 @@ function App() {
   const [showTrailer, setShowTrailer] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState("");
 
+  const [showFullMovie, setShowFullMovie] = useState(false);
+  const [fullMovieUrl, setFullMovieUrl] = useState("");
+
   const [selectedGenre, setSelectedGenre] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
-  
   const [showProfile, setShowProfile] = useState(false);
 
-  // STATE BARU UNTUK CAROUSEL TOP 10 HERO SECTION
   const [top10Movies, setTop10Movies] = useState([]);
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
   const [featuredMovie, setFeaturedMovie] = useState(null);
   const [heroTrailerKey, setHeroTrailerKey] = useState("");
+
+  // STATE BARU: Untuk menyimpan daftar film yang sedang/pernah ditonton
+  const [continueWatching, setContinueWatching] = useState([]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
@@ -34,6 +39,12 @@ function App() {
       setToken(savedToken);
       fetchMovies();
       fetchWatchlist(savedToken);
+      
+      // Ambil data riwayat nonton dari localStorage lokal
+      const savedProgress = localStorage.getItem("continueWatching");
+      if (savedProgress) {
+        setContinueWatching(JSON.parse(savedProgress));
+      }
     }
   }, []);
 
@@ -45,7 +56,6 @@ function App() {
     }
   }, [selectedGenre, selectedYear]);
 
-  // EFEK BARU: Timer untuk ganti film otomatis setiap 10 detik
   useEffect(() => {
     if (top10Movies.length === 0 || showWatchlist || searchQuery || selectedGenre || selectedYear) return;
     
@@ -55,12 +65,11 @@ function App() {
         loadHeroData(top10Movies[nextIndex]);
         return nextIndex;
       });
-    }, 10000); // 10000 ms = 10 detik
+    }, 10000); 
 
     return () => clearInterval(interval);
   }, [top10Movies, showWatchlist, searchQuery, selectedGenre, selectedYear]);
 
-  // FUNGSI BARU: Mengambil kunci YouTube untuk background Hero Section
   const loadHeroData = async (movie) => {
     setFeaturedMovie(movie);
     try {
@@ -69,7 +78,7 @@ function App() {
       if (data.trailer_key) {
         setHeroTrailerKey(data.trailer_key);
       } else {
-        setHeroTrailerKey(""); // Kembali ke gambar jika tidak ada trailer
+        setHeroTrailerKey(""); 
       }
     } catch (error) {
       setHeroTrailerKey("");
@@ -178,6 +187,27 @@ function App() {
   };
 
   const closeTrailer = () => { setShowTrailer(false); setTrailerUrl(""); };
+
+  // FUNGSI PLAY FILM + OTOMATIS SIMPAN KE CONTINUE WATCHING
+    const playFullMovie = (movie) => {
+      const movieId = movie.id || movie.movie_id;
+      setFullMovieUrl(`https://vidsrc.to/embed/movie/${movieId}`);
+      setShowFullMovie(true);
+
+    // Logika simpan riwayat nonton
+    setContinueWatching((prev) => {
+      const filtered = prev.filter((m) => (m.id || m.movie_id) !== movieId);
+      const updated = [movie, ...filtered].slice(0, 6); // Ambil maksimal 6 film terbaru
+      localStorage.setItem("continueWatching", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const closeFullMovie = () => {
+    setShowFullMovie(false);
+    setFullMovieUrl("");
+  };
+
   const truncateText = (str, n) => { return str?.length > n ? str.substr(0, n - 1) + "..." : str; };
 
   const resetHome = () => {
@@ -200,12 +230,12 @@ function App() {
         .search-input:focus { border-color: #E50914; }
         .movie-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; }
         .movie-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 15px 30px rgba(229, 9, 20, 0.2); border-color: rgba(229, 9, 20, 0.5); z-index: 10; }
-        .btn-play { background: #E50914; color: white; padding: 12px 30px; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
-        .btn-play:hover { background: #B20710; transform: scale(1.05); }
+        .btn-play-movie { background: white; color: black; padding: 12px 30px; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .btn-play-movie:hover { background: #e6e6e6; transform: scale(1.05); }
+        .btn-trailer { background: rgba(109, 109, 110, 0.7); color: white; padding: 12px 30px; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .btn-trailer:hover { background: rgba(109, 109, 110, 0.9); transform: scale(1.05); }
         .toast { position: fixed; bottom: 20px; right: 20px; padding: 15px 25px; border-radius: 8px; font-weight: 500; z-index: 9999; animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        /* CSS KHUSUS UNTUK BACKGROUND VIDEO HERO */
         .hero-container { position: relative; height: 85vh; width: 100%; overflow: hidden; display: flex; alignItems: center; padding: 0 60px; }
         .hero-video-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: hidden; background-color: #000; }
         .hero-video-wrapper iframe { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; pointer-events: none; }
@@ -213,10 +243,9 @@ function App() {
         .hero-content { position: relative; z-index: 2; max-width: 600px; animation: fadeIn 1s ease-in; }
         .carousel-indicators { position: absolute; bottom: 40px; right: 60px; z-index: 2; display: flex; gap: 8px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.3); cursor: pointer; transition: 0.3s; }
-        .dot.active { background: #E50914; transform: scale(1.3); }
+        .dot.active { background: white; transform: scale(1.3); }
       `}</style>
 
-      {/* TOAST & POPUPS DI SINI (Diringkas agar fokus ke Hero) */}
       {toast.show && <div className="toast" style={{ backgroundColor: toast.isError ? '#E50914' : '#4CAF50', color: 'white' }}>{toast.message}</div>}
       
       {showProfile && (
@@ -241,6 +270,27 @@ function App() {
         </div>
       )}
 
+      {/* THE PROTECTION PLAYER PLAYER IFRAME */}
+      {showFullMovie && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 5000, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={closeFullMovie}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#000' }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeFullMovie} style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: '5px', fontSize: '16px', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', gap: '10px' }}>⬅ Kembali ke NOTFLIX</button>
+            
+            {/* Tameng sandbox DIBUKA kembali agar video tidak error */}
+            <iframe 
+              width="100%" 
+              height="100%" 
+              src={fullMovieUrl} 
+              title="Full Movie Player" 
+              frameBorder="0" 
+              allowFullScreen
+            ></iframe>
+            
+          </div>
+        </div>
+      )}
+      
+
       <nav className="glass-nav">
         <h1 style={{ color: '#E50914', fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '1px', cursor: 'pointer' }} onClick={resetHome}>NOTFLIX</h1>
         <div style={{ display: 'flex', gap: '25px', flexGrow: 1, marginLeft: '20px' }}>
@@ -255,10 +305,9 @@ function App() {
         </div>
       </nav>
 
-      {/* --- HERO SECTION CAROUSEL VIDEO BACKGROUND --- */}
+      {/* --- HERO SECTION --- */}
       {!showWatchlist && !searchQuery && !selectedGenre && !selectedYear && featuredMovie && (
         <div className="hero-container">
-          {/* Latar Belakang Video (Atau Gambar Jika Video Kosong) */}
           <div className="hero-video-wrapper" style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${featuredMovie.backdrop_path})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
             {heroTrailerKey && (
               <iframe 
@@ -275,32 +324,52 @@ function App() {
             <span style={{ background: '#E50914', padding: '4px 10px', borderRadius: '3px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' }}>TOP 10 VIRAL #{currentHeroIndex + 1}</span>
             <h1 style={{ fontSize: '64px', fontWeight: '900', margin: '15px 0', textShadow: '2px 2px 4px rgba(0,0,0,0.8)', lineHeight: '1' }}>{featuredMovie.title}</h1>
             <p style={{ fontSize: '16px', color: '#e0e0e0', lineHeight: '1.6', marginBottom: '30px', textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>{truncateText(featuredMovie.overview, 180)}</p>
+            
             <div style={{ display: 'flex', gap: '15px' }}>
-              <button className="btn-play" onClick={() => openTrailer(featuredMovie)}>▶ Putar Trailer</button>
-              <button onClick={() => setSelectedMovie(featuredMovie)} style={{ background: 'rgba(109, 109, 110, 0.7)', color: 'white', padding: '12px 30px', border: 'none', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>ℹ Selengkapnya</button>
+              <button className="btn-play-movie" onClick={() => playFullMovie(featuredMovie)}>
+                <span style={{ fontSize: '20px' }}>▶</span> Putar Film
+              </button>
+              <button className="btn-trailer" onClick={() => openTrailer(featuredMovie)}>
+                🎬 Trailer
+              </button>
             </div>
           </div>
 
-          {/* Navigasi Titik-Titik Carousel */}
           <div className="carousel-indicators">
             {top10Movies.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`dot ${idx === currentHeroIndex ? 'active' : ''}`}
-                onClick={() => {
-                  setCurrentHeroIndex(idx);
-                  loadHeroData(top10Movies[idx]);
-                }}
-              ></div>
+              <div key={idx} className={`dot ${idx === currentHeroIndex ? 'active' : ''}`} onClick={() => { setCurrentHeroIndex(idx); loadHeroData(top10Movies[idx]); }}></div>
             ))}
           </div>
         </div>
       )}
 
+      {/* MAIN CONTAINER CONTENT */}
       <main style={{ padding: '40px 60px', maxWidth: '1600px', margin: '0 auto', marginTop: (!showWatchlist && !searchQuery && !selectedGenre && !selectedYear) ? '0px' : '0', position: 'relative', zIndex: 10 }}>
+        
+        {/* BARIS BARU: LANJUTKAN MENONTON (Hanya muncul jika ada riwayat film & di Beranda utama) */}
+        {!showWatchlist && !searchQuery && !selectedGenre && !selectedYear && continueWatching.length > 0 && (
+          <div style={{ marginBottom: '45px' }}>
+            <h2 style={{ marginBottom: '20px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px', color: '#E50914' }}>
+              🍿 Lanjutkan Menonton
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '25px' }}>
+              {continueWatching.map((movie, index) => (
+                <div key={`cw-${index}`} onClick={() => setSelectedMovie(movie)} className="movie-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#141519', borderRadius: '10px', overflow: 'hidden', position: 'relative' }}>
+                  <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path || movie.poster}`} alt={movie.title} style={{ width: '100%', height: '300px', objectFit: 'cover' }} />
+                  {/* Efek progress bar merah palsu di bawah poster biar makin estetik netflix */}
+                  <div style={{ width: '100%', height: '4px', backgroundColor: '#333' }}>
+                    <div style={{ width: `${85 - (index * 12)}%`, height: '100%', backgroundColor: '#E50914' }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <h2 style={{ marginBottom: '30px', fontWeight: '600', fontSize: '22px', borderLeft: '4px solid #E50914', paddingLeft: '15px' }}>
           {showWatchlist ? '🎬 Daftar Tontonan Saya' : searchQuery ? `🔍 Hasil Pencarian: "${searchQuery}"` : (selectedGenre || selectedYear) ? '🎯 Hasil Filter Kategori' : '🔥 Sedang Trending'}
         </h2>
+
         {loading ? (
            <p style={{textAlign: 'center', padding: '50px', color: '#888'}}>Memuat data film...</p>
         ) : (
@@ -319,11 +388,17 @@ function App() {
       {/* MODAL DETAIL FILM */}
       {selectedMovie && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedMovie(null)}>
-          <div style={{ backgroundColor: '#141519', padding: '30px', borderRadius: '15px', maxWidth: '650px', width: '100%', border: '1px solid #333' }} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ margin: '0 0 10px 0' }}>{selectedMovie.title}</h2>
-            <p style={{ color: '#ccc', lineHeight: '1.6' }}>{selectedMovie.overview || "Sinopsis tidak tersedia."}</p>
-            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
-              <button className="btn-play" onClick={() => openTrailer(selectedMovie)}>▶ Putar Trailer</button>
+          <div style={{ backgroundColor: '#141519', padding: '40px', borderRadius: '15px', maxWidth: '700px', width: '100%', border: '1px solid #333' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 10px 0', fontSize: '28px' }}>{selectedMovie.title}</h2>
+            <p style={{ color: '#ccc', lineHeight: '1.6', marginBottom: '30px' }}>{selectedMovie.overview || "Sinopsis tidak tersedia."}</p>
+            
+            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+              <button className="btn-play-movie" onClick={() => playFullMovie(selectedMovie)} style={{ flexGrow: 1, justifyContent: 'center' }}>
+                ▶ Putar Film
+              </button>
+              <button className="btn-trailer" onClick={() => openTrailer(selectedMovie)}>
+                🎬 Trailer
+              </button>
               <button onClick={() => toggleWatchlist(selectedMovie)} style={{ padding: '12px 25px', background: watchlist.find(item => item.movie_id === (selectedMovie.id || selectedMovie.movie_id)) ? '#4CAF50' : '#333', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>
                 {watchlist.find(item => item.movie_id === (selectedMovie.id || selectedMovie.movie_id)) ? '✔ Di Watchlist' : '+ Watchlist'}
               </button>
