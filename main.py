@@ -111,19 +111,16 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Username atau password salah")
     return {"access_token": create_access_token(data={"sub": db_user.username}), "token_type": "bearer"}
 
-# INI DIA ENDPOINT YANG TADI HILANG (Film Populer)
 @app.get("/api/movies")
 def get_movies():
     response = requests.get(f"{TMDB_BASE_URL}/movie/popular?api_key={TMDB_API_KEY}")
     return response.json().get("results", [])
 
-# INI ENDPOINT PENCARIAN
 @app.get("/api/search")
 def search_movies(query: str):
     response = requests.get(f"{TMDB_BASE_URL}/search/movie?api_key={TMDB_API_KEY}&query={query}")
     return response.json().get("results", [])
 
-# ENDPOINT WATCHLIST
 @app.post("/api/watchlist")
 def add_to_watchlist(item: WatchlistItem, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     existing = db.query(WatchlistDB).filter(WatchlistDB.username == current_user, WatchlistDB.movie_id == item.movie_id).first()
@@ -147,3 +144,36 @@ def delete_from_watchlist(movie_id: int, current_user: str = Depends(get_current
     db.delete(item)
     db.commit()
     return {"message": "Berhasil dihapus"}
+
+
+# ==========================================
+# ENDPOINT BARU: AMBIL DATA TRAILER YOUTUBE
+# ==========================================
+@app.get("/api/movies/{movie_id}/trailer")
+def get_movie_trailer(movie_id: int):
+    # Mengambil video spesifik untuk film ini dari TMDB
+    tmdb_url = f"{TMDB_BASE_URL}/movie/{movie_id}/videos?api_key={TMDB_API_KEY}&language=en-US"
+    
+    try:
+        response = requests.get(tmdb_url)
+        if response.status_code != 200:
+            raise HTTPException(status_code=404, detail="Trailer tidak ditemukan di TMDB")
+            
+        data = response.json()
+        videos = data.get("results", [])
+        
+        # 1. Cari video yang spesifik bertipe 'Trailer' dan bersumber dari 'YouTube'
+        for video in videos:
+            if video.get("site") == "YouTube" and video.get("type") == "Trailer":
+                return {"trailer_key": video.get("key")}
+                
+        # 2. Alternatif: Jika tipe 'Trailer' tidak ada, ambil video YouTube apa saja yang tersedia (misal: Teaser)
+        for video in videos:
+            if video.get("site") == "YouTube":
+                return {"trailer_key": video.get("key")}
+                
+        # Jika benar-benar kosong
+        return {"trailer_key": None}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal menghubungi TMDB: {str(e)}")
